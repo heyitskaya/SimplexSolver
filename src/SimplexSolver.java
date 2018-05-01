@@ -39,6 +39,10 @@ public class SimplexSolver{
 	int[] basicVars;
 	int[] nonBasicVars;
 	int enteringVar;
+	int leavingVar;
+	
+	double[][] bArr = {{100},{120},{45},{30}};
+	SimpleMatrix b = new SimpleMatrix(bArr);
 
 	/**use double for more precision**/
 	/**for getting all subsets of size numRows to create our BFS**/
@@ -65,6 +69,8 @@ public class SimplexSolver{
 		 objectFuncCostMap.put(5,200);
 		 objectFuncCostMap.put(6,300);
 		 findBFS();
+		 findEnteringVariable();
+		 findLeavingVariable();
 		 
 		
 	}
@@ -198,6 +204,7 @@ public class SimplexSolver{
 	}
 	
 	public void findEnteringVariable() {
+		System.out.println("In findEnteringVariable");
 		//first compute reduced cost of each non basic variable and then pick the 
 		//biggest one 
 		int greatestCost = Integer.MIN_VALUE;
@@ -211,9 +218,9 @@ public class SimplexSolver{
 				objectiveFunctionCost = objectFuncCostMap.get(currVar);
 			}
 			//pick up here
-			SimpleMatrix cbTranspose = new SimpleMatrix(numRows,1);
+			SimpleMatrix cbTranspose = new SimpleMatrix(1,numRows);
 			
-			int currRow = 0;
+			int currCol = 0;
 			int cost;
 			SimpleMatrix sm;
 			double[][] d = new double[1][1];
@@ -227,17 +234,46 @@ public class SimplexSolver{
 				}
 				d[0][0] = cost;
 				sm = new SimpleMatrix(d);
-				cbTranspose.insertIntoThis(currRow, 0, sm);
+				cbTranspose.insertIntoThis(0, currCol, sm);
+				currCol++;
 				
 			}
+			System.out.println("cbTranspose looks like this ");
+			cbTranspose.print(); //looks legit
 			//create BInverse
 			BInverse = B.invert();
+			System.out.println("BInverse looks like");
+			BInverse.print(); //also looks legit 
 		//	int matrixProduct = 
 		//	int reducedCost = objectiveFunctionCost
+			SimpleMatrix tempMatrix1 = cbTranspose.mult(BInverse);
+			SimpleMatrix tempMatrix2 = tempMatrix1.mult(colMap.get(currVar));
+			tempMatrix2.print();
+			double currReducedCost = objectiveFunctionCost-tempMatrix2.get(0,0);
+			if(currReducedCost>greatestCost) {
+				enteringVar = currVar;
+			}
 			
 		}
+		System.out.println("enteringVar we found was "+ enteringVar);
 	}
 	
+	public void findLeavingVariable() {
+		SimpleMatrix m1 = BInverse.mult(b);
+		SimpleMatrix m2 = BInverse.mult(colMap.get(enteringVar));
+		//iterate through m1 and m2 col by col and get divide them
+		//we want to find the smallest number
+		double mostRestrictive = Integer.MAX_VALUE;
+		for(int i=0;i<numRows;i++) {
+			double numerator = m1.get(i, 0);
+			double denominator = m2.get(i,0);
+			double quotient = numerator/denominator;
+			if(quotient<mostRestrictive) {
+				leavingVar = basicVars[i];
+			}
+		}
+		System.out.println("leaving var we found is "+ leavingVar);
+	}
 	public static void main(String args[]){
 		ArrayList<Integer> superSet = new ArrayList<>();
 		superSet.add(1);
