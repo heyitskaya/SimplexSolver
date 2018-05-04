@@ -73,6 +73,7 @@ public class SimplexSolver{
 		 System.out.println("START OF ITERATION");	
 		 System.out.println("BFS looks like");
 		 printBFS();
+		 while(reducedCost>0) {
 			 System.out.println("REDUCED COST " + reducedCost);
 			 findEnteringVariable();
 			 findLeavingVariable();
@@ -87,19 +88,8 @@ public class SimplexSolver{
 			 
 			 constructBMatrix(basicVars);
 			 reducedCost = getReducedCost();
-			 findEnteringVariable();
-			 findLeavingVariable();
-			 
-			System.out.println("On third iteration");
-			printBFS();
-			
-			findEnteringVariable();
-			findLeavingVariable();
-			updateBasicVars(leavingVar, enteringVar);
-			updateNonBasicVars(leavingVar, enteringVar);
-			constructBMatrix(basicVars);
-			reducedCost = getReducedCost(); //no good reduced cost so yay!
-			findObjectFunctionValue();
+		 }
+		 findObjectFunctionValue();
 		 
 			 
 		 
