@@ -1,37 +1,20 @@
 
 import java.util. *;
-//import org.ejml.simple.SimpleBase<SimpleMatrix>;
 import org.ejml.simple.SimpleMatrix;
 import org.ejml.data.DMatrixRMaj;
-import org.ejml.data.DMatrixD1;
-import org.ejml.data.DMatrix1Row;
-import org.ejml.simple.SimpleBase;
-//import org.ejml.simple.SimpleBase<SimpleMatrix>;
-import org.ejml.UtilEjml;
-import org.ejml.simple.ops.SimpleOperations_DDRM;
 import org.ejml.dense.row.CommonOps_DDRM;
-
-import org.ejml.ops.*;
-
-import org.ejml.data.DMatrix3;
-import org.ejml.data.DMatrix3x3;
-import org.ejml.data.DMatrixRMaj;
-import org.ejml.dense.fixed.CommonOps_DDF3;
-import org.ejml.ops.ConvertDMatrixStruct;
-import org.ejml.simple.SimpleMatrix;
-import org.ejml.data.DMatrix;
-import org.ejml.simple.SimpleBase;
-//import org.ejml.simple.SimpleBase<T>;
 import java.util.Iterator;
-
+/** This class uses double values to give greater precision, it assumes that the user will input the LP in 
+ * standard form
+ * @author kayani
+ *
+ */
 public class SimplexSolver{
-	/**Using EJML**/
 	int numRows=0;
 	int numCols=0;
 	DMatrixRMaj internalMatrix;
 	HashMap<Integer,SimpleMatrix> colMap = new HashMap<Integer,SimpleMatrix>();
-	HashMap<Integer, Integer> objectFuncCostMap = new HashMap<Integer,Integer>();
-	
+	HashMap<Integer, Integer> objectFuncCostMap;
 	static List<Set<Integer>> possibleCombinations;
 	int currCombo=0;
 	SimpleMatrix B;
@@ -40,25 +23,23 @@ public class SimplexSolver{
 	int[] nonBasicVars;
 	int enteringVar;
 	int leavingVar;
+	double[][] bArr;
+	SimpleMatrix b ;
 	
-	double[][] bArr = {{100},{120},{45},{30}};
-	SimpleMatrix b = new SimpleMatrix(bArr);
-
-	/**use double for more precision**/
-	/**for getting all subsets of size numRows to create our BFS**/
-	
-	public SimplexSolver(double[][] arr) {
+	public SimplexSolver(double[][] arr, double[][] bArr, HashMap<Integer,Integer> objectFuncCostMap) {
+		this.objectFuncCostMap = objectFuncCostMap;
 		 internalMatrix= new DMatrixRMaj(arr);
+		 this.bArr = bArr;
+		 b = new SimpleMatrix(bArr);
 		 this.numRows = arr.length;
 		 this.numCols = arr[0].length;
 		 nonBasicVars = new int[numCols-numRows];
 		 basicVars = new int[numRows];
-		// internalMatrix.print();
 		 SimpleMatrix simple = SimpleMatrix.wrap(internalMatrix);
 		 for(int i=1;i<=numCols;i++) {
 			 colMap.put(i, simple.extractVector(false, i-1));
 		 }
-		 //public static List<Set<Integer>> getSubsets(ArrayList<Integer> superSet, int k) {
+		
 		 ArrayList<Integer> superSet = new ArrayList<Integer>();
 		 for(int i=1;i<=numCols;i++) {
 			 superSet.add(i);
@@ -66,36 +47,29 @@ public class SimplexSolver{
 		 getSubsets(superSet,numRows);
 		 objectFuncCostMap.put(5,200);
 		 objectFuncCostMap.put(6,300);
+		 System.out.println("The initial BFS looks like");
 		 findBFS();
 		 double reducedCost = getReducedCost();
 		
-		 
-		 System.out.println("START OF ITERATION");	
-		 System.out.println("BFS looks like");
-		 printBFS();
 		 while(reducedCost>0) {
-			 System.out.println("REDUCED COST " + reducedCost);
 			 findEnteringVariable();
 			 findLeavingVariable();
-			 System.out.println("basic vars before update " + Arrays.toString(basicVars));
-			 System.out.println("non basic vars before update " + Arrays.toString(nonBasicVars));
-			 System.out.println("on second iteration");
 			 //update xB and B matrix and 
 			 updateBasicVars(leavingVar, enteringVar);
 			 updateNonBasicVars(leavingVar, enteringVar);
 			 //once you've updated non basic variables and basic variables 
 			 //so far B is only created in findBFS which is a problem because we won't call findBFS again
-			 
 			 constructBMatrix(basicVars);
 			 reducedCost = getReducedCost();
+			 
 		 }
 		 findObjectFunctionValue();
-		 
-			 
-		 
-		
 	}
 	
+	/** This is the last step in the algorithm. Once we've exited our while loop that means there 
+	 * is no good reduced cost, therefore we calculate the reduced cost using Cb * Cx
+	 * @return the optimal value 
+	 */
 	private double findObjectFunctionValue() {
 		double value = 0 ;
 		SimpleMatrix bArrMatrix = new SimpleMatrix(bArr);
@@ -111,6 +85,7 @@ public class SimplexSolver{
 		
 		
 	}
+	/** For debugging reasons to print out what our current BFS looks like **/
 	private void printBFS() {
 		SimpleMatrix m1 = new SimpleMatrix(numRows,numRows);
 		for(int i=0;i<basicVars.length;i++) {
@@ -121,13 +96,20 @@ public class SimplexSolver{
 		
 	}
 	
+	/**Helper method for finding our initial BFS. Worst case, we'll need to consider all subsets of size numRows so here we recursively generate
+	 * them all and store it in an ArrayList. Once the ArrayList is calculated it will be stored as a global variable
+	 * for us to iterate through to find our initial BFS. This is only called at the beginning of the algorithm.
+	 * @param superSet
+	 * @param k
+	 * @param index
+	 * @param current
+	 * @param solution
+	 */
 	private static void getSubsets(ArrayList<Integer> superSet, int k, int index, Set<Integer> current,List<Set<Integer>> solution) {
-	    //successful stop clause
 	    if (current.size() == k) {
 	        solution.add(new HashSet<>(current));
 	        return;
 	    }
-	    //unseccessful stop clause
 	    if (index == superSet.size()) return;
 	    Integer x = superSet.get(index);
 	    current.add(x);
@@ -138,19 +120,23 @@ public class SimplexSolver{
 	    getSubsets(superSet, k, index+1, current, solution);
 	}
 
+	/** Wrapper method that calls helper method to create ArrayList of all possible subsets of size k
+	 * 
+	 * @param superSet
+	 * @param k
+	 * @return a list of subsets of size k
+	 */
 	public static List<Set<Integer>> getSubsets(ArrayList<Integer> superSet, int k) {
 	    possibleCombinations = new ArrayList<>();
 	    getSubsets(superSet, k, 0, new HashSet<Integer>(), possibleCombinations);
 	    return possibleCombinations;
 	}
 
-	public void test() {
-		double[][] dMatrix= {{1,0,9},{2,7,6}};
-		SimpleMatrix sm = new SimpleMatrix(dMatrix);
-	}
-	
-	
-	
+	/** This method finds our initial BFS.
+	 * It iterates through the arraylist of subsets and constructs square matrices based on the variable in the subsets
+	 * Then it finds the determinant through an api call to determine whether the vectors in the square matrix are linearly 
+	 * independent. If so then we initialize our BFS.
+	 */
 	public void findBFS() {
 		boolean found = false;
 		while(!found && currCombo<=possibleCombinations.size()) {
@@ -171,13 +157,13 @@ public class SimplexSolver{
 			for(int i=0;i<arr.length;i++) {
 				m1.insertIntoThis(0,i, colMap.get(arr[i]));
 			}
-			if(CommonOps_DDRM.det(m1.getMatrix())==1) {
+			if(CommonOps_DDRM.det(m1.getMatrix())!=0) {
 				//then they are linearly independent which means we've
 				//currently found our BFS
 				B=m1;
 				found = true;
 				currCombo++;
-				B.print(); //beautiful!
+				B.print(); 
 			
 				int pos1 = 0;
 				for(int i=1;i<=numCols;i++) {
@@ -193,10 +179,6 @@ public class SimplexSolver{
 						pos2++;
 					}
 				}
-		
-				for(int i=0;i<basicVars.length;i++) {
-					System.out.println(basicVars[i]);
-				} 
 				return;
 			}
 			else {
@@ -205,10 +187,9 @@ public class SimplexSolver{
 		}
 		
 	}
-	/**Do we need to explicitly check for linear independence after we've
-	 * found a leaving and entering variable"
+	/**Constructing a B matrix after we've update basic variables to include entering variable
 	 * @param basicVars
-	 * @return
+	 * @return The new BFS
 	 */
 	public SimpleMatrix constructBMatrix(int[] basicVars) {
 		SimpleMatrix m1 = new SimpleMatrix(numRows,numRows);
@@ -217,21 +198,18 @@ public class SimplexSolver{
 			
 			m1.insertIntoThis(0,i, colMap.get(basicVars[i]));
 		}
-	/**	System.out.println("MMMMMMMM ");
-		m1.print();
-		System.out.println(CommonOps_DDRM.det(m1.getMatrix()));
-		if(CommonOps_DDRM.det(m1.getMatrix())==1) {
-			//then they are linearly independent which means we've
-			//currently found our BFS
-			B=m1;
-		} **/
 		B=m1;
-		System.out.println("in constructBMatrix BMatrix looks like");
+		System.out.println("The new BFS looks like");
 		B.print();
 		return B;
 	}
+	
+	/** To find entering variable we first compute the reduced cost of each non basic variable and pick the largest one
+	 * greater than 0
+	 * Stores entering variable in global variable enteringVar
+	 * 
+	 */
 	public void findEnteringVariable() {
-		System.out.println("In findEnteringVariable");
 		//first compute reduced cost of each non basic variable and then pick the 
 		//biggest one 
 		double greatestCost = Integer.MIN_VALUE;
@@ -244,9 +222,7 @@ public class SimplexSolver{
 			else {
 				objectiveFunctionCost = objectFuncCostMap.get(currVar);
 			}
-			//pick up here
 			SimpleMatrix cbTranspose = new SimpleMatrix(1,numRows);
-			
 			int currCol = 0;
 			int cost;
 			SimpleMatrix sm;
@@ -277,9 +253,15 @@ public class SimplexSolver{
 			}
 			
 		}
-		System.out.println("enteringVar we found was "+ enteringVar);
+		System.out.println("entering vector we found was "+ colMap.get(enteringVar));
 	}
 	
+	/** Iterates through array of non basic variables and calculates the reduced cost for each one using formula
+	 * and returns the greatest reduced cost
+	 * Used for determining whether to stay in while loop or exit while loop to calculate optimal value
+	 * 
+	 * @return the greatest reduced cost
+	 */
 	public double getReducedCost() {
 	//	System.out.println("In findEnteringVariable");
 		//first compute reduced cost of each non basic variable and then pick the 
@@ -294,7 +276,6 @@ public class SimplexSolver{
 			else {
 				objectiveFunctionCost = objectFuncCostMap.get(currVar);
 			}
-			//pick up here
 			SimpleMatrix cbTranspose = new SimpleMatrix(1,numRows);
 			
 			int currCol = 0;
@@ -315,19 +296,11 @@ public class SimplexSolver{
 				currCol++;
 				
 			}
-			//System.out.println("cbTranspose looks like this ");
-			//cbTranspose.print(); //looks legit
-			//create BInverse
 			BInverse = B.invert();
-			/**System.out.println("BInverse looks like");
-			BInverse.print(); //also looks legit  **/
-		//	int matrixProduct = 
-		//	int reducedCost = objectiveFunctionCost
 			SimpleMatrix tempMatrix1 = cbTranspose.mult(BInverse);
 			SimpleMatrix tempMatrix2 = tempMatrix1.mult(colMap.get(currVar));
-			//tempMatrix2.print();
 			double currReducedCost = objectiveFunctionCost-tempMatrix2.get(0,0);
-			if(currReducedCost>greatestCost && currReducedCost>0) {
+			if(currReducedCost>greatestCost ) {
 				greatestCost = currReducedCost;
 			}
 			
@@ -337,12 +310,17 @@ public class SimplexSolver{
 			return greatestCost;
 		}
 		else {
-			System.out.println("reducedCost is 0");
-			return 0;
+			System.out.println("reducedCost is " + greatestCost);
+			return greatestCost;
 		}
 		
 	}
 	
+	/** Called after we've found entering and leaving variable, we update the basicVars array to more 
+	 * easily construct our new BFS 
+	 * @param leaving
+	 * @param entering
+	 */
 	private void updateBasicVars(int leaving, int entering) {
 		for(int i=0;i<numRows;i++) {
 			if(basicVars[i] == leaving) {
@@ -351,7 +329,11 @@ public class SimplexSolver{
 		}
 		System.out.println("Basic vars "+Arrays.toString(basicVars));
 	}
-	
+	/** Called after we've found entering and leaving variable, we update the nonBasicVars array 
+	 * to more easily find reduced cost in next iteration
+	 * @param leaving
+	 * @param entering
+	 */
 	private void updateNonBasicVars(int leaving, int entering) {
 		for(int i=0;i<numCols-numRows;i++) {
 			if(nonBasicVars[i] == entering) {
@@ -360,55 +342,38 @@ public class SimplexSolver{
 		}
 		System.out.println("Non basic vars " +Arrays.toString(nonBasicVars));
 	}
-	
+	/**Finds leaving variable after we've found entering variable 
+	 * Calculates the most restrictive constraint and chooses the variable corresponding with that constraint
+	 */
 	public void findLeavingVariable() {
 		SimpleMatrix m1 = BInverse.mult(b);
-	/**	System.out.println("--------");
-		
-		m2.print();
-		System.out.println("---------");**/
 		SimpleMatrix m2 = BInverse.mult(colMap.get(enteringVar));
-		
-		
-	/**	System.out.println("m2 looks like " +m2);
-		m2.print(); **/
 		//iterate through m1 and m2 col by col and get divide them
 		//we want to find the smallest number
 		double mostRestrictive = Integer.MAX_VALUE;
 		for(int i=0;i<numRows;i++) {
 			double numerator = m1.get(i, 0);
-		//	System.out.println("numerator " + numerator);
 			double denominator = m2.get(i,0);
-		//
-		//	System.out.println("denominator "+ denominator);
 			double quotient = numerator/denominator;
-		//	System.out.println("quotient " +quotient);
-		//	System.out.println("basicVars[i] " +basicVars[i]);
-		//	System.out.println("---------");
-			
-			if(quotient == 0 && denominator<0) { //this actually has no upper bound
-				
+			if(/**quotient == 0 &&**/ denominator<0 && numerator >= 0) { //this actually has no upper bound
+				//therefore we don't consider this case
 			}
 			else if(quotient<mostRestrictive) {
 				
 				leavingVar = basicVars[i];
 				mostRestrictive = quotient;
 			}
-			
 		}
 		
-		System.out.println("leaving var we found is "+ leavingVar);
+		System.out.println("leaving vector we found is "+ colMap.get(leavingVar));
 	}
 	public static void main(String args[]){
-		ArrayList<Integer> superSet = new ArrayList<>();
-		superSet.add(1);
-		superSet.add(2);
-		superSet.add(3);
-		superSet.add(4);
-		System.out.println(getSubsets(superSet,2));
+		double[][] bArr = {{100},{120},{45},{30}};
 		double[][] arr = {{1,0,0,0,3,2}, {0,1,0,0,2,4},{0,0,1,0,1,1}, {0,0,0,1,0,1}};
-		SimplexSolver ss= new SimplexSolver(arr);
-		//ss.findDeterminant();
+		HashMap<Integer, Integer> objectFuncCostMap = new HashMap<Integer,Integer>();
+		objectFuncCostMap.put(5,200);
+		objectFuncCostMap.put(6,300);
+		SimplexSolver ss= new SimplexSolver(arr, bArr, objectFuncCostMap);
 		
 	}
 }
